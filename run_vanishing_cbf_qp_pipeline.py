@@ -1,5 +1,8 @@
 """
 Run the vanishing CBF-QP example and generate plots.
+
+Andreas Oliveira, Mustafa Bozdag
+03/2026
 """
 
 import subprocess
@@ -17,7 +20,8 @@ def run_step(script_name: str) -> None:
 
 
 def main() -> None:
-    run_step("example_vanishing_cbf_qp.py")
+    # run_step("example_vanishing_cbf_qp.py")
+    run_step("example_multi.py")
     run_step("plot_vanishing_cbf_qp.py")
 
 
