@@ -18,11 +18,8 @@ def run_step(script_name: str) -> None:
     if result.returncode != 0:
         raise RuntimeError(f"Failed running {script_name} (exit {result.returncode})")
 
-
 def main() -> None:
-    # run_step("example_vanishing_cbf_qp.py")
     run_step("example.py")
-    # run_step("plot_vanishing_cbf_qp.py")
     run_step("plots.py")
 
 if __name__ == "__main__":

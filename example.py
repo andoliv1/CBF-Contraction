@@ -12,37 +12,30 @@ Andreas Oliveira, Mustafa Bozdag
 """
 
 import numpy as np
-import sympy as sp
 from vanishing_filter import VanishingFilter, run_simulation
+from barriers import make_hU, make_hB
 
 
 # ========== Define the system using symbolic computation ==========
 
-x_sym, y_sym = sp.symbols("x y", real=True)
-
-# Obstacle shape parameters
+# hU Obstacle shape parameters
 x_scale = 1.5    # > 1 stretches wider, < 1 narrows
 y_scale = 1.0    # > 1 stretches taller, < 1 flattens
-x_shift = 0.0    # shifts obstacle left/right
-y_shift = 15.0   # shifts obstacle up/down
-# Scale/Shift
-x_s = x_sym / x_scale - x_shift
-y_s = y_sym / y_scale - y_shift
-# Unsafe set barrier (from vanishing-controller.py)
-hU_sym = (4*x_s**4 - 20*x_s**2*y_s - 13*x_s**2
-          + 25*y_s**2 + 35*y_s - 2)
+x_shift = 0.0    # Shifts obstacle left/right
+y_shift = 15.0   # Shifts obstacle up/down
+mode = 'raw'     # 'raw', 'tanh', or 'log' (smoothing mode)
+sigma = 5.0     # Smoothing parameter for 'tanh' mode (steeper as sigma -> 0)
+delta = 0.5     # Smoothing parameter for 'log' mode (smoother near boundary as delta -> 0)
+h_U, h_U_grad, _ = make_hU(x_scale, y_scale, x_shift, y_shift, mode, sigma, delta)
 
-# Symbolic derivatives and lambdify for numerical evaluation
-dhdx_U_sym   = sp.diff(hU_sym, x_sym)
-dhdy_U_sym   = sp.diff(hU_sym, y_sym)
-h_U_func     = sp.lambdify((x_sym, y_sym), hU_sym, "numpy")
-grad_hU_func = sp.lambdify((x_sym, y_sym), (dhdx_U_sym, dhdy_U_sym), "numpy")
+# hB Ball parameters
+r = 30.0                        # Ball radius
+Q = np.eye(2)                   # Weight matrix
+h_B, h_B_grad, _ = make_hB(r, Q)
 
 # ========== Parameters ==========
 
-r = 30.0                        # Ball radius
 l_0 = np.array([-20.0, 20.0])   # Equilibrium shift (unscaled)
-Q = np.eye(2)                   # Weight matrix
 t_sim = 20.0                    # Simulation time
 dt = 0.001                      # Time step
 
@@ -51,27 +44,22 @@ x0_center = np.array([0.0, 18.0])
 x0_radius = 2
 n_points = 10
 
-# Class-K/K_infty functions
-def kappa_B(h): return 2.0 * h
-def kappa_U(h): return h ** 10
-def alpha(t):   return t
-
-def s_fun(t):   return 1 / (1 + alpha(t))   # Scaling for equilibrium shift (vanishing schedule)
-def l_fun(t):   return l_0 / (1 + t/4)      # Time-varying equilibrium shift
-
 # Control constraints
-u_max = 100.0
+u_max = 10.0
 u_norm_type = 'inf'
 
-# ========== System dynamics and barrier functions ==========
-
+# System dynamics 
 def f(x):        return -x                              # Autonomous dynamics: stable at origin                    
-def g(x, t):     return np.eye(2)                       # Control matrix: 2x2 identity (full actuation)
-def h_U(x):      return float(h_U_func(x[0], x[1]))     # Unsafe set barrier function
-def h_U_grad(x):                                        # Gradient of h_U (returns tuple), convert to numpy array
-    gv = grad_hU_func(x[0], x[1])                   
-    return np.array([float(gv[0]), float(gv[1])])       
+def g(x, t):     return np.eye(2)                       # Control matrix: 2x2 identity (full actuation)       
 def u_nom(x, t): return np.zeros(2)                     # Nominal control (zero in this example)
+
+# Class-K/K_infty functions
+def kappa_B(h): return h
+def kappa_U(h): return h
+def alpha(t): return t
+
+def s_fun(t): return (1 + alpha(t))                 # Scaling for equilibrium shift (vanishing schedule)
+def l_fun(t): return (l_0 * max(1 - t / t_sim, 0))  # Time-varying equilibrium shift (vanishes completely at t = t_sim)
 
 # ========== Grid of initial conditions inside IC ball ==========
 
@@ -89,7 +77,9 @@ print(f"[Info] Running {len(x0_list)} trajectories (n_points={len(x0_list)}, r={
 # ========== Create filter (shared, stateless) ==========
 
 filter_obj = VanishingFilter(
-    f=f, g=g, l_0=l_0, h_U=h_U, h_U_grad=h_U_grad,
+    f=f, g=g, l_0=l_0, 
+    h_B=h_B, h_U=h_U,
+    h_B_grad=h_B_grad, h_U_grad=h_U_grad,
     r=r, Q=Q, kappa_B=kappa_B, kappa_U=kappa_U,
     alpha=alpha, s_fun=s_fun, l_fun=l_fun,
     u_max=u_max, u_norm_type=u_norm_type,
@@ -117,7 +107,7 @@ for i, x0 in enumerate(x0_list):
 # ========== Save ==========
 
 data = {
-    'all_results':    all_results,
+    'all_results': all_results,
     'x0_center': x0_center,
     'x0_radius': x0_radius,
     'params': {
@@ -126,12 +116,15 @@ data = {
         'l0': l_0,
         'n_trajectories': len(x0_list),
     },
-    'obstacle': {
+    'hU': {
         'x_scale': x_scale,
         'y_scale': y_scale,
         'x_shift': x_shift,
         'y_shift': y_shift,
+        'sigma': sigma,
     },
+    'u_max': u_max,
+    'u_norm_type': u_norm_type,
 }
 np.save('trajectory_data.npy', data, allow_pickle=True)
 print("[Saved] trajectory_data.npy")

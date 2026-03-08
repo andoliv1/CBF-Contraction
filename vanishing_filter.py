@@ -16,7 +16,6 @@ from scipy.optimize import minimize
 from scipy.integrate import solve_ivp
 from typing import Callable, Tuple, Optional
 
-
 class VanishingFilter:
     """
     Vanishing CBF-QP Safety Filter on S = B_r(0) \ U with equilibrium shift.
@@ -40,7 +39,9 @@ class VanishingFilter:
         f: Callable,
         g: Callable,
         l_0: np.ndarray,
+        h_B: Callable,
         h_U: Callable,
+        h_B_grad: Callable,
         h_U_grad: Callable,
         r: float,
         Q: Optional[np.ndarray] = None,
@@ -55,9 +56,10 @@ class VanishingFilter:
         self.f = f
         self.g = g
         self.l_0 = l_0
+        self.h_B = h_B
         self.h_U = h_U
+        self.h_B_grad = h_B_grad
         self.h_U_grad = h_U_grad
-        self.r = r
         self.n = len(l_0)
         
         self.Q = Q if Q is not None else np.eye(self.n)
@@ -70,21 +72,9 @@ class VanishingFilter:
         self.u_norm_type = u_norm_type if u_norm_type is not None else 'inf'
         self.u_max = u_max if u_max is not None else 10.0
     
-    def h_B(self, x: np.ndarray) -> float:
-        """Ball barrier: h_B(x) = r - ||x||_{Q}."""
-        norm_x = np.sqrt(float(x @ self.Q @ x))
-        return self.r - norm_x
-    
-    def grad_h_B(self, x: np.ndarray) -> np.ndarray:
-        """Gradient of h_B."""
-        norm_x = np.sqrt(float(x @ self.Q @ x))
-        if norm_x < 1e-10:
-            return np.zeros(self.n)
-        return -(self.Q @ x) / norm_x
-    
     # Lie derivatives for CBF constraints
-    def L_f_h_B(self, x: np.ndarray) -> float: return float(self.grad_h_B(x) @ self.f(x))
-    def L_g_h_B(self, x: np.ndarray, t: float) -> np.ndarray: return self.grad_h_B(x) @ self.g(x, t)
+    def L_f_h_B(self, x: np.ndarray) -> float: return float(self.h_B_grad(x) @ self.f(x))
+    def L_g_h_B(self, x: np.ndarray, t: float) -> np.ndarray: return self.h_B_grad(x) @ self.g(x, t)
     def L_f_h_U(self, x: np.ndarray) -> float: return float(self.h_U_grad(x) @ self.f(x))
     def L_g_h_U(self, x: np.ndarray, t: float) -> np.ndarray: return self.h_U_grad(x) @ self.g(x, t)
     
@@ -100,7 +90,7 @@ class VanishingFilter:
             min 0.5 ||k||_Q^2
             s.t.
               L_f h_B + L_g h_B (k/s') + ∇h_B^T l >= -κ_B(h_B)
-              L_f h_bar_U + L_g h_bar_U (k/s') + ∇h_bar_U^T l >= -κ_U(h_bar_U)
+              L_f h_U + L_g h_U (k/s') + ∇h_U^T l >= -κ_U(h_U)
         
         Returns k* (unscaled control), which is then applied as u = k* / s'(t).
         """
@@ -112,16 +102,15 @@ class VanishingFilter:
         l_t = self.l_fun(t)
         h_B = self.h_B(x)
         h_U = self.h_U(x)
-        grad_h_B = self.grad_h_B(x)
+        grad_h_B = self.h_B_grad(x)
         grad_h_U = self.h_U_grad(x)
         L_f_h_B = self.L_f_h_B(x)
         L_g_h_B = self.L_g_h_B(x, t)
         L_f_h_U = self.L_f_h_U(x)
         L_g_h_U = self.L_g_h_U(x, t)
-        cost_matrix = self.Q
         
         # CBF constraints: A k <= b
-        epsilon = 0.01  # Tightening margin, tuneable
+        epsilon = 0.1  # Tightening margin, tuneable
         A1 = -L_g_h_B / s_t  # coefficient for k, negated for <= form
         b1 = L_f_h_B + float(grad_h_B @ l_t) + self.kappa_B(h_B) - epsilon
         A2 = -L_g_h_U / s_t
@@ -145,31 +134,20 @@ class VanishingFilter:
                 'jac': lambda k, i=i: -A[i, :],
             })
         
-        # Control bounds: ||k||_inf <= u_max * s(t) or ||k||_1 <= u1 (tuneable)
-        if self.u_norm_type == 'inf':
-            for i in range(m):
-                constraints.append({'type': 'ineq', 'fun': lambda k, i=i, s=s_t: self.u_max * s - k[i]})
-                constraints.append({'type': 'ineq', 'fun': lambda k, i=i, s=s_t: self.u_max * s + k[i]})
-        elif self.u_norm_type == 'l1':
-            constraints.append({'type': 'ineq', 'fun': lambda k: np.sum(np.abs(k)) - self.u2,
-                                'jac': lambda k: np.sign(k)})
-            constraints.append({'type': 'ineq', 'fun': lambda k: self.u1 - np.sum(np.abs(k)),
-                                'jac': lambda k: -np.sign(k)})
-
         # Control bounds
         if self.u_norm_type == 'inf':
             for i in range(m):
-                constraints.append({'type': 'ineq', 'fun': lambda k, i=i, s=s_t: self.u_max * s - k[i]})
-                constraints.append({'type': 'ineq', 'fun': lambda k, i=i, s=s_t: self.u_max * s + k[i]})
+                constraints.append({'type': 'ineq', 'fun': lambda k, i=i: self.u_max - k[i]})
+                constraints.append({'type': 'ineq', 'fun': lambda k, i=i: self.u_max + k[i]})
         elif self.u_norm_type == 'l1':
             constraints.append({'type': 'ineq', 'fun': lambda k: self.u_max - np.sum(np.abs(k)),
                                  'jac': lambda k: -np.sign(k)})
         
         # Objective — swap by commenting/uncommenting
-        def objective(k):      return 0.5 * float(k @ self.Q @ k)
-        def objective_grad(k): return self.Q @ k
-        # def objective(k):      return -float((self.f(x) + l_t) @ k)
-        # def objective_grad(k): return -(self.f(x) + l_t)
+        # def objective(k):      return 0.5 * float(k @ self.Q @ k)
+        # def objective_grad(k): return self.Q @ k
+        def objective(k):      return -float((self.f(x) + l_t) @ k) # + 1e-5 * float(k @ k)
+        def objective_grad(k): return -(self.f(x) + l_t) # + 2e-5 * k
         
         # Solve with SLSQP
         result = minimize(
@@ -180,9 +158,11 @@ class VanishingFilter:
             constraints=constraints,
             options={'ftol': eps, 'maxiter': 100},
         )
-        
+ 
         if not result.success:
-            print(f"Warning: QP did not converge at t={t:.4f}. Message: {result.message}")
+            print(f"Warning: Did not converge at t={t:.4f}. Message: {result.message}")
+            # print(f"  b1={b1:.4f}, b2={b2:.4f}, h_B={h_B:.4f}, h_U={h_U:.4f}")
+            # print(f"  L_g_h_U={L_g_h_U}, u_max={self.u_max}")
         
         return result.x
     
