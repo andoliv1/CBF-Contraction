@@ -74,7 +74,7 @@ style = {
 }
 
 zoom = {
-    'center':     x0_center + [-6,2],   # Set after loading data
+    'center':     x0_center + [-6,3],   # Set after loading data
     'width':      x0_radius * 5,        # Set after loading data
     'height':     x0_radius * 5,        # Set after loading data
     'angle':      0,                    # Degrees: 0=right, 90=top, 180=left, 270=bottom (axes fraction from center)
@@ -116,7 +116,7 @@ ax1.contour(XX, YY, h_U_grid, levels=[0.0],
             colors='red', linewidths=style['unsafe_lw'])
 ax1.plot(rB*np.cos(th), rB*np.sin(th),
          style['ball_ls'], linewidth=style['ball_lw'],
-         color='red', label=f'$B_r(0)$, $r={rB}$')
+         color='red', label=r'$B_{30}(0)$')
 
 for i, r_ in enumerate(all_results):
     X = r_['X']
@@ -128,14 +128,14 @@ for i, r_ in enumerate(all_results):
 ax1.plot(x0_center[0] + x0_radius*np.cos(ic_th),
          x0_center[1] + x0_radius*np.sin(ic_th),
          style['ic_ball_ls'], linewidth=style['ic_ball_lw'],
-         color='green', label=f'$x_0$ Ball, $r={x0_radius}$')
+         color='green', label=r'$\mathcal{X}_0$')
 
 l_t = all_results[0]['l_t_vals']
 ax1.plot(l_t[:, 0], l_t[:, 1],
          style['l_t_ls'], linewidth=style['l_t_lw'],
          color='black', label='$l(t)$')
 
-ax1.plot(0, 0, '*', markersize=style['origin_sz'], color='red', zorder=5)
+ax1.plot(0, 0, '*', markersize=style['origin_sz'], color='red')
 
 ax1.set_xlim(xlim); ax1.set_ylim(ylim)
 ax1.set_aspect('equal', adjustable='box')
