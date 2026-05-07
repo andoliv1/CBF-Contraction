@@ -59,9 +59,12 @@ u_norm_type = data['u_norm_type']
 if u_norm_type == "inf":
     u_norm_ord = np.inf
     u_norm_label = r'\infty'
-elif u_norm_type == "1":
+elif u_norm_type in ("l1", "1"):
     u_norm_ord = 1
     u_norm_label = '1'
+elif u_norm_type in ("l2", "2"):
+    u_norm_ord = 2
+    u_norm_label = '2' 
 else:
     raise ValueError(f"Unknown norm type: {u_norm_type}")
 
@@ -84,6 +87,7 @@ style = {
     'marker_end_sz':  4,
     'origin_sz':      10,
     'log_scale':      True,
+    'show_lg_h':      True,
 }
 
 zoom = {
@@ -116,6 +120,8 @@ xs_g       = np.linspace(*xlim, grid_n)
 ys_g       = np.linspace(*ylim, grid_n)
 XX, YY     = np.meshgrid(xs_g, ys_g)
 h_U_grid   = h_U_grid_func(XX, YY)
+dh_dy, dh_dx = np.gradient(h_U_grid, ys_g, xs_g)
+L_g_h_U_grid = dh_dx + dh_dy
 th         = np.linspace(0, 2*np.pi, 400)
 ic_th      = np.linspace(0, 2*np.pi, 400)
 
@@ -127,6 +133,20 @@ ax1.contourf(XX, YY, h_U_grid, levels=[-1e10, 0.0],
              colors=['lightcoral'], alpha=style['unsafe_alpha'])
 ax1.contour(XX, YY, h_U_grid, levels=[0.0],
             colors='red', linewidths=style['unsafe_lw'])
+lg_contour = ax1.contour(XX, YY, L_g_h_U_grid, levels=[0.0],
+                         colors='blue', linewidths=1.5, linestyles='-.')
+if lg_contour.allsegs and lg_contour.allsegs[0]:
+    lg_segment = max(lg_contour.allsegs[0], key=lambda seg: seg.shape[0])
+    lg_label_xy = lg_segment[len(lg_segment) // 2]
+    ax1.annotate(
+        r'$\mathcal{L}_g h_U = 0$',
+        xy=lg_label_xy,
+        xytext=(10, 10),
+        textcoords='offset points',
+        color='blue',
+        fontsize=10,
+        bbox=dict(facecolor='white', edgecolor='none', alpha=0.75, pad=1.5),
+    )
 ax1.plot(rB*np.cos(th), rB*np.sin(th),
          style['ball_ls'], linewidth=style['ball_lw'],
          color='red', label=r'$B_{40}(0)$')
@@ -176,6 +196,9 @@ axins.contourf(XX, YY, h_U_grid, levels=[-1e10, 0.0],
                colors=['lightcoral'], alpha=style['unsafe_alpha'])
 axins.contour(XX, YY, h_U_grid, levels=[0.0],
               colors='red', linewidths=style['unsafe_lw'])
+cs = ax1.contour(XX, YY, L_g_h_U_grid, levels=[0.0],
+            colors='blue', linewidths=1.5, linestyles='-.')
+ax1.clabel(cs, fmt={0.0: r'$\mathcal{L}_g h_U = 0$'}, inline=True, fontsize=10)
 axins.plot(x0_center[0] + x0_radius*np.cos(ic_th),
            x0_center[1] + x0_radius*np.sin(ic_th),
            style['ic_ball_ls'], linewidth=style['ic_ball_lw'], color='green')

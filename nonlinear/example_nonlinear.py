@@ -54,7 +54,7 @@ n_points = 10
 
 # Control constraints
 u_max = 100.0
-u_norm_type = 'inf'
+u_norm_type = 'l2'
 
 
 # System dynamics
@@ -62,7 +62,7 @@ def f(x):
     x1, x2 = x
     return np.array([
         -2 * x1 + x2 - np.sin(x1),
-        -2 * x2 - x1 - np.cos(x2) - 1,
+        -2 * x2 - x1 + np.cos(x2) - 1,
     ])
 
 
@@ -123,6 +123,7 @@ filter_obj = VanishingFilter(
     r=r, Q=Q, kappa_B=kappa_B, kappa_U=kappa_U,
     alpha=alpha, s_fun=s_fun, l_fun=l_fun,
     u_max=u_max, u_norm_type=u_norm_type,
+    include_ball_constraint=False,
 )
 
 

@@ -54,6 +54,7 @@ class VanishingFilter:
         l_fun: Optional[Callable] = None,
         u_norm_type: Optional[str] = None,
         u_max: Optional[float] = None,
+        include_ball_constraint: bool = True,
     ):
         self.f = f
         self.g = g
@@ -73,6 +74,7 @@ class VanishingFilter:
         
         self.u_norm_type = u_norm_type if u_norm_type is not None else 'inf'
         self.u_max = u_max if u_max is not None else 10.0
+        self.include_ball_constraint = include_ball_constraint
     
     # Lie derivatives for CBF constraints
     def L_f_h_B(self, x: np.ndarray) -> float: return float(self.h_B_grad(x) @ self.f(x))
@@ -117,9 +119,12 @@ class VanishingFilter:
         b1 = L_f_h_B + float(grad_h_B @ l_t) + self.kappa_B(h_B) - epsilon
         A2 = -L_g_h_U / s_t
         b2 = L_f_h_U + float(grad_h_U @ l_t) + self.kappa_U(h_U) - epsilon
-        # Stack constraints
-        A = np.vstack([A1, A2])
-        b = np.array([b1, b2])
+        if self.include_ball_constraint:
+            A = np.vstack([A1, A2])
+            b = np.array([b1, b2])
+        else:
+            A = np.vstack([A2])
+            b = np.array([b2])
         
         # Initial guess: nominal control or zero
         if u_nom is not None:
@@ -156,15 +161,21 @@ class VanishingFilter:
                     model.addConstr(abs_k[j] >= k_vars[j], name=f'abs_pos_{j}')
                     model.addConstr(abs_k[j] >= -k_vars[j], name=f'abs_neg_{j}')
                 model.addConstr(gp.quicksum(abs_k[j] for j in range(m)) <= self.u_max, name='u_l1')
+            elif self.u_norm_type == 'l2':
+                model.addQConstr(
+                    gp.quicksum(k_vars[j] * k_vars[j] for j in range(m)) <= self.u_max ** 2,
+                    name='u_l2'
+                )
             else:
                 raise ValueError(f"Unknown norm type: {self.u_norm_type}")
 
-            # Objective: maximize <f(x) + l(t), g(x,t)k>
+            # Objective: maximize the current linear term while penalizing large k.
             g_xt = self.g(x, t)
             drift = self.f(x) + l_t
             c_eff = g_xt.T @ drift
             model.setObjective(
-                gp.quicksum(float(c_eff[j]) * k_vars[j] for j in range(m)),
+                gp.quicksum(float(c_eff[j]) * k_vars[j] for j in range(m))
+                - gp.quicksum(k_vars[j] * k_vars[j] for j in range(m)),
                 GRB.MAXIMIZE
             )
 
@@ -175,7 +186,10 @@ class VanishingFilter:
 
             if model.Status == GRB.INFEASIBLE:
                 print(f"Warning: LP infeasible at t={t:.4f} (Gurobi status=INFEASIBLE)")
-                print(f"  b1={b1:.4f}, b2={b2:.4f}, h_B={h_B:.4f}, h_U={h_U:.4f}")
+                if self.include_ball_constraint:
+                    print(f"  b1={b1:.4f}, b2={b2:.4f}, h_B={h_B:.4f}, h_U={h_U:.4f}")
+                else:
+                    print(f"  b2={b2:.4f}, h_U={h_U:.4f}")
                 print(f"  ||L_g_h_U||={np.linalg.norm(L_g_h_U):.4f}, u_max={self.u_max}")
             else:
                 print(f"Warning: Gurobi did not return OPTIMAL at t={t:.4f}. Status={model.Status}")

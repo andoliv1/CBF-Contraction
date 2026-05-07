@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from pathlib import Path
 import sys
+import argparse
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -24,18 +25,38 @@ from utils.barriers import make_hU
 figures_dir = ROOT / "Figures"
 figures_dir.mkdir(exist_ok=True)
 
-output_file = figures_dir / "trajectory.gif"
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Create trajectory GIF for linear or nonlinear mode"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["linear", "nonlinear"],
+        default="linear",
+        help="Which trajectory dataset to animate",
+    )
+    parser.add_argument(
+        "--no-plot-l-t",
+        dest="plot_l_t",
+        action="store_false",
+        help="Do not plot the equilibrium shift trajectory l(t)",
+    )
+    parser.set_defaults(plot_l_t=True)
+    return parser.parse_args()
 
 
-def load_trajectory_data():
-    path = ROOT / "trajectory_data.npy"
+def load_trajectory_data(mode: str):
+    path = ROOT / (
+        "trajectory_data_nonlinear.npy" if mode == "nonlinear" else "trajectory_data.npy"
+    )
     try:
         loaded = np.load(path, allow_pickle=True).item()
         print(f"[Info] Loaded data from {path}")
         return loaded
     except FileNotFoundError as exc:
         raise RuntimeError(
-            "Could not find trajectory_data.npy in the current directory."
+            f"Could not find {path.name} in the current directory."
         ) from exc
     except ModuleNotFoundError as exc:
         raise RuntimeError(
@@ -44,8 +65,14 @@ def load_trajectory_data():
             "in this environment."
         ) from exc
 
+args = parse_args()
+output_file = (
+    figures_dir / "trajectory_nonlinear.gif"
+    if args.mode == "nonlinear"
+    else figures_dir / "trajectory.gif"
+)
 
-data = load_trajectory_data()
+data = load_trajectory_data(args.mode)
 params = data["params"]
 rB = params["rB"]
 all_results = data.get("all_results", None)
@@ -119,8 +146,10 @@ ax.plot(
 )
 ax.plot(0, 0, "*", markersize=10, color="red", zorder=5)
 
-l_t = all_results[0]["l_t_vals"]
-ax.plot(l_t[:, 0], l_t[:, 1], "--", linewidth=1.5, color="black", label="$l(t)$")
+if args.plot_l_t:
+    # Plot the equilibrium shift only when requested.
+    l_t = all_results[0]["l_t_vals"]
+    ax.plot(l_t[:, 0], l_t[:, 1], "--", linewidth=1.5, color="black", label="$l(t)$")
 
 ax.set_xlim(xlim)
 ax.set_ylim(ylim)

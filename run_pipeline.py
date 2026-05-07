@@ -11,11 +11,11 @@ import sys
 from pathlib import Path
 
 
-def run_step(script_name: str) -> None:
+def run_step(script_name: str, *script_args: str) -> None:
     script_path = Path(__file__).parent / script_name
     if not script_path.exists():
         raise FileNotFoundError(f"Missing script: {script_path}")
-    result = subprocess.run([sys.executable, str(script_path)], check=False)
+    result = subprocess.run([sys.executable, str(script_path), *script_args], check=False)
     if result.returncode != 0:
         raise RuntimeError(f"Failed running {script_name} (exit {result.returncode})")
 
@@ -33,9 +33,11 @@ def main() -> None:
     if args.mode == "linear":
         run_step("linear/example.py")
         run_step("linear/plots.py")
+        run_step("utils/animate.py", "--mode", "linear")
     else:
         run_step("nonlinear/example_nonlinear.py")
         run_step("nonlinear/plots_nonlinear.py")
+        run_step("utils/animate.py", "--mode", "nonlinear", "--no-plot-l-t")
 
 if __name__ == "__main__":
     main()
