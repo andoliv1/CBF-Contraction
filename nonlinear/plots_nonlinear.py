@@ -87,7 +87,8 @@ style = {
     'marker_end_sz':  4,
     'origin_sz':      10,
     'log_scale':      True,
-    'show_lg_h':      True,
+    'show_lg_h':      False,
+    'show_hB':        False,
 }
 
 zoom = {
@@ -133,23 +134,25 @@ ax1.contourf(XX, YY, h_U_grid, levels=[-1e10, 0.0],
              colors=['lightcoral'], alpha=style['unsafe_alpha'])
 ax1.contour(XX, YY, h_U_grid, levels=[0.0],
             colors='red', linewidths=style['unsafe_lw'])
-lg_contour = ax1.contour(XX, YY, L_g_h_U_grid, levels=[0.0],
-                         colors='blue', linewidths=1.5, linestyles='-.')
-if lg_contour.allsegs and lg_contour.allsegs[0]:
-    lg_segment = max(lg_contour.allsegs[0], key=lambda seg: seg.shape[0])
-    lg_label_xy = lg_segment[len(lg_segment) // 2]
-    ax1.annotate(
-        r'$\mathcal{L}_g h_U = 0$',
-        xy=lg_label_xy,
-        xytext=(10, 10),
-        textcoords='offset points',
-        color='blue',
-        fontsize=10,
-        bbox=dict(facecolor='white', edgecolor='none', alpha=0.75, pad=1.5),
-    )
-ax1.plot(rB*np.cos(th), rB*np.sin(th),
-         style['ball_ls'], linewidth=style['ball_lw'],
-         color='red', label=r'$B_{40}(0)$')
+if style['show_lg_h']:
+    lg_contour = ax1.contour(XX, YY, L_g_h_U_grid, levels=[0.0],
+                             colors='blue', linewidths=1.5, linestyles='-.')
+    if lg_contour.allsegs and lg_contour.allsegs[0]:
+        lg_segment = max(lg_contour.allsegs[0], key=lambda seg: seg.shape[0])
+        lg_label_xy = lg_segment[len(lg_segment) // 2]
+        ax1.annotate(
+            r'$\mathcal{L}_g h_U = 0$',
+            xy=lg_label_xy,
+            xytext=(10, 10),
+            textcoords='offset points',
+            color='blue',
+            fontsize=10,
+            bbox=dict(facecolor='white', edgecolor='none', alpha=0.75, pad=1.5),
+        )
+if style['show_hB']:
+    ax1.plot(rB*np.cos(th), rB*np.sin(th),
+             style['ball_ls'], linewidth=style['ball_lw'],
+             color='red', label=r'$B_{40}(0)$')
 
 for i, r_ in enumerate(all_results):
     X = r_['X']
@@ -196,9 +199,13 @@ axins.contourf(XX, YY, h_U_grid, levels=[-1e10, 0.0],
                colors=['lightcoral'], alpha=style['unsafe_alpha'])
 axins.contour(XX, YY, h_U_grid, levels=[0.0],
               colors='red', linewidths=style['unsafe_lw'])
-cs = ax1.contour(XX, YY, L_g_h_U_grid, levels=[0.0],
-            colors='blue', linewidths=1.5, linestyles='-.')
-ax1.clabel(cs, fmt={0.0: r'$\mathcal{L}_g h_U = 0$'}, inline=True, fontsize=10)
+if style['show_lg_h']:
+    cs = axins.contour(XX, YY, L_g_h_U_grid, levels=[0.0],
+                       colors='blue', linewidths=1.5, linestyles='-.')
+    axins.clabel(cs, fmt={0.0: r'$\mathcal{L}_g h_U = 0$'}, inline=True, fontsize=10)
+if style['show_hB']:
+    axins.plot(rB*np.cos(th), rB*np.sin(th),
+               style['ball_ls'], linewidth=style['ball_lw'], color='red')
 axins.plot(x0_center[0] + x0_radius*np.cos(ic_th),
            x0_center[1] + x0_radius*np.sin(ic_th),
            style['ic_ball_ls'], linewidth=style['ic_ball_lw'], color='green')
@@ -254,20 +261,23 @@ print("[Saved] Figures/levelsets_hU_nonlinear.png")
 
 # ========== Plot 3: Ball barrier h_B(x(t)) ==========
 
-fig3, ax3 = plt.subplots(figsize=(8, 4))
-for i, r_ in enumerate(all_results):
-    ax3.plot(r_['tgrid'], r_['h_B_vals'],
-             color=colors[i], linewidth=style['traj_lw'], alpha=style['traj_alpha'])
-ax3.axhline(0, color='r', linestyle='--', linewidth=1.5, label='$h_B(x(t)) = 0$')
-ax3.set_xlabel('Time $t$ (s)', fontsize=style['axis_fs'])
-ax3.set_ylabel('$h_B$', fontsize=style['axis_fs'])
-ax3.tick_params(axis='both', labelsize=style['tick_fs'])
-ax3.grid(True, alpha=0.3)
-ax3.legend(fontsize=style['legend_fs'])
-fig3.tight_layout()
-fig3.savefig(figures_dir / 'barrier_ball_nonlinear.png', dpi=600, bbox_inches='tight')
-plt.close(fig3)
-print("[Saved] Figures/barrier_ball_nonlinear.png")
+if style['show_hB']:
+    fig3, ax3 = plt.subplots(figsize=(8, 4))
+    for i, r_ in enumerate(all_results):
+        ax3.plot(r_['tgrid'], r_['h_B_vals'],
+                 color=colors[i], linewidth=style['traj_lw'], alpha=style['traj_alpha'])
+    ax3.axhline(0, color='r', linestyle='--', linewidth=1.5, label='$h_B(x(t)) = 0$')
+    ax3.set_xlabel('Time $t$ (s)', fontsize=style['axis_fs'])
+    ax3.set_ylabel('$h_B$', fontsize=style['axis_fs'])
+    ax3.tick_params(axis='both', labelsize=style['tick_fs'])
+    ax3.grid(True, alpha=0.3)
+    ax3.legend(fontsize=style['legend_fs'])
+    fig3.tight_layout()
+    fig3.savefig(figures_dir / 'barrier_ball_nonlinear.png', dpi=600, bbox_inches='tight')
+    plt.close(fig3)
+    print("[Saved] Figures/barrier_ball_nonlinear.png")
+else:
+    print("[Skipped] Figures/barrier_ball_nonlinear.png (style['show_hB']=False)")
 
 # ========== Plot 4: Safety barrier h_U(x(t)) ==========
 
