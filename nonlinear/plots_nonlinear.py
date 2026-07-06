@@ -88,7 +88,7 @@ style = {
     'origin_sz':      10,
     'log_scale':      True,
     'show_lg_h':      False,
-    'show_hB':        False,
+    'show_hB':        True,
 }
 
 zoom = {

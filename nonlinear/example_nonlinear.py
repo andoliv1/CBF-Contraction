@@ -123,7 +123,7 @@ filter_obj = VanishingFilter(
     r=r, Q=Q, kappa_B=kappa_B, kappa_U=kappa_U,
     alpha=alpha, s_fun=s_fun, l_fun=l_fun,
     u_max=u_max, u_norm_type=u_norm_type,
-    include_ball_constraint=False,
+    include_ball_constraint=True,
 )
 
 
